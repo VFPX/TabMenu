@@ -1,0 +1,393 @@
+**************************************************************************************
+*$PROGRAM$ sample.mpr
+*$CREATED$ 2/03/2007
+**************************************************************************************
+*-- Initialise the variables
+LOCAL loToolbar, loMenuTab, loPopup, loItem, loDefPopup
+
+#define WM_GETMINMAXINFO    0x0024
+#define GWL_WNDPROC         (-4)
+#define WM_ACTIVATEAPP      0x001C
+#define WM_KEYDOWN          0x0100
+#define WM_KEYUP            0x0101
+#define WM_SYSKEYUP         0x0105
+
+*-- Need to declare the Windows API command to determine the windows process handle
+DECLARE INTEGER GetWindowLong IN WIN32API INTEGER hWnd, INTEGER nIndex
+
+*-- The toolbar tabmenu container will be added to the _SCREEN object because we
+* can guarantee a path to this object in all VFP applications and that way do
+* not require any additional global variables the same is true for the menu event 
+* handler object
+_SCREEN.AddProperty('oTabMenu')
+_SCREEN.AddProperty('oTabMenuHandler')
+
+IF TYPE("_SCREEN.ActiveForm") = "O" AND _SCREEN.ActiveForm.ShowWindow = 2
+  *-- The top level form exists so the tabmenu toolbar should be added to this form
+  * as should the nOldProc property to store the windows processs handle
+  _SCREEN.ActiveForm.AddProperty('oToolBar')
+  _SCREEN.ActiveForm.AddProperty('nOldProc')
+
+  _SCREEN.ActiveForm.oToolbar = CREATEOBJECT("tbrTabMenu")
+  _SCREEN.ActiveForm.oToolbar.Left = 0 - SYSMETRIC(3) - _SCREEN.ActiveForm.oToolbar.cntTabMenu.Left
+  _SCREEN.ActiveForm.oToolbar.Top = 0 - SYSMETRIC(34) - SYSMETRIC(4) - _SCREEN.ActiveForm.oToolbar.cntTabMenu.Top
+  
+  _SCREEN.ActiveForm.nOldProc = GetWindowLong(_SCREEN.ActiveForm.hWnd, GWL_WNDPROC)
+
+  _SCREEN.oTabMenu = _SCREEN.ActiveForm.oToolbar.cntTabMenu
+  _SCREEN.oTabMenu.nOldProc  = _SCREEN.ActiveForm.nOldProc 
+  _SCREEN.oTabMenu.cCaption  = _SCREEN.ActiveForm.Caption
+  _SCREEN.oTabMenu.Width     = _SCREEN.ActiveForm.Width 
+  _SCREEN.oTabMenu.oMainForm = _SCREEN.ActiveForm
+  
+  BINDEVENT(_SCREEN.ActiveForm.hWnd, WM_ACTIVATEAPP, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_SCREEN.ActiveForm.hWnd, WM_KEYDOWN, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_SCREEN.ActiveForm.hWnd, WM_KEYUP, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_SCREEN.ActiveForm.hWnd, WM_SYSKEYUP, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_SCREEN.ActiveForm, "Resize", _SCREEN.oTabMenu, "MainFormResize")
+ELSE
+  *-- The screen is being used as the main form so the toolbar will be added in the VFP screen
+  * as should the nOldProc property to store the windows processs handle
+  _SCREEN.AddProperty('oToolBar')
+  _SCREEN.AddProperty('nOldProc')
+  
+  _SCREEN.oToolbar = CREATEOBJECT("tbrTabMenu")
+  _SCREEN.oToolbar.Left = 0 - SYSMETRIC(3) - _SCREEN.oToolbar.cntTabMenu.Left
+  _SCREEN.oToolbar.Top = 0 - SYSMETRIC(34) - SYSMETRIC(4) - _SCREEN.oToolbar.cntTabMenu.Top
+
+  _SCREEN.nOldProc = GetWindowLong(_VFP.hWnd, GWL_WNDPROC)
+
+  _SCREEN.oTabMenu = _SCREEN.oToolbar.cntTabMenu
+  _SCREEN.oTabMenu.nOldProc = _SCREEN.nOldProc 
+  _SCREEN.oTabMenu.cCaption = _SCREEN.Caption
+  _SCREEN.oTabMenu.Width    = _SCREEN.Width
+  
+  *-- Get rid of the system menu as this is supposed to replace it
+  SET SYSMENU OFF
+
+  BINDEVENT(_VFP.hWnd, WM_ACTIVATEAPP, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_VFP.hWnd, WM_KEYDOWN, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_VFP.hWnd, WM_KEYUP, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_VFP.hWnd, WM_SYSKEYUP, _SCREEN.oTabMenu, "WMEventHandler")
+  BINDEVENT(_SCREEN, "Resize", _SCREEN.oTabMenu, "MainFormResize")
+ENDIF
+
+*-- Make sure that the menu event handler object exists as this is the thing
+* that all menu events will be bound to
+_SCREEN.otabMenuHandler = CREATEOBJECT("cusMenuEventHandler")
+
+**************************************************************************************
+*Setup code for the menu
+**************************************************************************************
+_SCREEN.oTabMenu.lTitleBar = .t.
+_SCREEN.oTabMenu.lShowQuickBar = .t.
+_SCREEN.oTabMenu.cfrmStartClass = "frmExampleStart"
+_SCREEN.oTabMenu.lAllowResize = .t.
+
+*goForm.oToolbar.Width  = goForm.Width - 30
+goForm.Height = _SCREEN.oTabMenu.Height
+
+BINDEVENT(_SCREEN.oTabMenu, "AppMinimize", goForm, "AppMinimize")
+BINDEVENT(_SCREEN.oTabMenu, "AppExit", goForm, "AppExit")
+BINDEVENT(_SCREEN.oTabMenu, "AppMaximize", goForm, "AppMaximize")
+BINDEVENT(_SCREEN.oTabMenu, "AppRestore", goForm, "AppRestore")
+
+*BINDEVENT(_SCREEN.oTabMenu, "AppMinimize", _SCREEN.oTabMenuHandler, "AppMinimize")
+*BINDEVENT(_SCREEN.oTabMenu, "AppExit", _SCREEN.oTabMenuHandler, "AppExit")
+*BINDEVENT(_SCREEN.oTabMenu, "AppMaximize", _SCREEN.oTabMenuHandler, "AppMaximize")
+*BINDEVENT(_SCREEN.oTabMenu, "AppRestore", _SCREEN.oTabMenuHandler, "AppRestore")
+  
+
+*-- Add the Home Menu Tab
+loMenuTab = _SCREEN.oTabMenu.AddMenuItem('Home','H')
+
+*-- Add the Home #1 popup
+loPopup = _SCREEN.oTabMenu.AddPopup('Home #1',1)
+loPopup.Width = _SCREEN.oTabMenuHandler.nDefaultItemWidth
+loPopup.Alignment = _SCREEN.oTabMenuHandler.nDefaultAlignment
+loPopup.nColumns = 3
+loPopup.Width = (100 * loPopup.nColumns)
+
+loItem = loPopup.AddPopupItem('Option 1','NORM','A')
+loItem.cPicture = 'new.bmp'
+loItem.ToolTipText = [The tooltip text for option 1]
+loItem.cItemKey = 'HOME.HOME#1.OPTION1'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "c_2120PL7JI")
+
+loItem = loPopup.AddPopupItem('Option 2','NORM','B')
+loItem.cPicture = 'edit.bmp'
+loItem.cItemKey = 'HOME.HOME#1.OPTION2'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "c_2120PL7JJ")
+
+loItem = loPopup.AddPopupItem('Option 3','NORM','C')
+loItem.cSkipForExp = [NOT (TYPE('_SCREEN.activeform')='O' AND _SCREEN.Activeform.ShowWindow<>2)]
+loItem.cItemKey = 'HOME.HOME#1.OPTION3'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "p_2120PL7JK")
+
+loItem = loPopup.AddPopupItem('Option 4','NORM','D')
+loItem.cItemKey = 'HOME.HOME#1.OPTION4'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+
+loItem = loPopup.AddPopupItem('Option 5','NORM','')
+loItem.cItemKey = 'HOME.HOME#1.OPTION5'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+
+loItem = loPopup.AddPopupItem('Option 6','NORM','Q')
+loItem.cItemKey = 'HOME.HOME#1.OPTION6'
+loItem.nShowSubmenu = 1
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "u_2120PL7JL")        
+
+*-- Add the Programs Menu Tab
+loMenuTab = _SCREEN.oTabMenu.AddMenuItem('Programs','P')
+
+*-- Add the Program #1 popup
+loPopup = _SCREEN.oTabMenu.AddPopup('Program #1',2)
+loPopup.Width = _SCREEN.oTabMenuHandler.nDefaultItemWidth
+loPopup.Alignment = _SCREEN.oTabMenuHandler.nDefaultAlignment
+loPopup.nColumns = 2
+loPopup.Width = (100 * loPopup.nColumns)
+
+loItem = loPopup.AddPopupItem('Option A','NORM','')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIONA'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+
+loItem = loPopup.AddPopupItem('Change Border','NORM','B')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.CHANGEBORDER'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "p_2120PL7KN")
+
+loItem = loPopup.AddPopupItem('Option C','NORM','U')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIONC'
+loItem.nShowSubmenu = 1
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "u_2120PL7KW")        
+
+loItem = loPopup.AddPopupItem('Option D','NORM','Y')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIOND'
+loItem.nShowSubmenu = 1
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "u_2120PL7KY")        
+
+*-- Add the Reports Menu Tab
+loMenuTab = _SCREEN.oTabMenu.AddMenuItem('Reports','R')
+
+*-- Add the Reports #1 popup
+loPopup = _SCREEN.oTabMenu.AddPopup('Reports #1',3)
+loPopup.Width = _SCREEN.oTabMenuHandler.nDefaultItemWidth
+loPopup.Alignment = _SCREEN.oTabMenuHandler.nDefaultAlignment
+
+loItem = loPopup.AddPopupItem('Option Z','NORM','')
+loItem.cItemKey = 'REPORTS.REPORTS#1.OPTIONZ'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "c_2120PL7M0")
+
+loItem = loPopup.AddPopupItem('Option Y','NORM','')
+loItem.cItemKey = 'REPORTS.REPORTS#1.OPTIONY'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+
+*-- Add the Reports #2 popup
+loPopup = _SCREEN.oTabMenu.AddPopup('Reports #2',3)
+loPopup.Width = _SCREEN.oTabMenuHandler.nDefaultItemWidth
+loPopup.Alignment = _SCREEN.oTabMenuHandler.nDefaultAlignment
+loPopup.nColumns = 2
+loPopup.Width = (100 * loPopup.nColumns)
+
+loItem = loPopup.AddPopupItem('Option X','NORM','G')
+loItem.cItemKey = 'REPORTS.REPORTS#2.OPTIONX'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "b_2120PL7MB")
+
+loItem = loPopup.AddPopupItem('Debugger','NORM','')
+loItem.ToolTipText = ["Displays the debugger"]
+loItem.cItemKey = 'REPORTS.REPORTS#2.DEBUGGER'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "b_2120PL7MC")
+
+loItem = loPopup.AddPopupItem('Option W','NORM','')
+loItem.cItemKey = 'REPORTS.REPORTS#2.OPTIONW'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+
+loItem = loPopup.AddPopupItem('Resize Form','NORM','V')
+loItem.cItemKey = 'REPORTS.REPORTS#2.RESIZEFORM'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "p_2120PL7MD")
+
+loItem = loPopup.AddPopupItem('Option U','NORM','')
+loItem.cItemKey = 'REPORTS.REPORTS#2.OPTIONU'
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+IF FILE('New.bmp')
+  loItem = _SCREEN.oTabMenu.cntQuickBar.AddItem('New.bmp')
+  loItem.ToolTipText = [Tooltip for quick item 1]
+  loItem.cItemKey = 'QUICK.NEWBMP'
+ENDIF
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+IF FILE('Edit.bmp')
+  loItem = _SCREEN.oTabMenu.cntQuickBar.AddItem('Edit.bmp')
+  loItem.ToolTipText = [Tooltip for quick item 2]
+  loItem.cItemKey = 'QUICK.EDITBMP'
+ENDIF
+BINDEVENT(loItem, "Execute", _SCREEN.oTabMenuHandler, "MenuDefault")
+_SCREEN.oTabMenu.SelectMenuItem(1)
+IF TYPE("_SCREEN.ActiveForm") = "O" AND _SCREEN.ActiveForm.ShowWindow = 2
+  _SCREEN.ActiveForm.oToolbar.Refresh()
+  _SCREEN.ActiveForm.oToolbar.Show()
+ELSE
+  _SCREEN.oToolbar.Refresh()
+  _SCREEN.oToolbar.Show()
+ENDIF
+
+RETURN
+
+**************************************************************************************
+*$CLASS$ cusMenuEventHandler
+**************************************************************************************
+DEFINE CLASS cusMenuEventHandler AS Custom
+
+  *-- Initialise the properties
+  nDefaultItemWidth = 150
+  nDefaultAlignment = 2
+
+**************************************************************************************
+*$METHOD$ MenuDefault()
+*
+*$PURPOSE$
+* This method contains the code run by the selected menu options if the menu option 
+* has no code of its own.
+*$PURPOSE$
+**************************************************************************************
+FUNCTION MenuDefault()
+AEVENTS(paSource,0)
+MESSAGEBOX(paSource[1].cItemKey,4096,_SCREEN.oTabMenu.cCaption)
+ENDFUNC
+
+
+FUNCTION c_2120PL7JI()
+DO FORM testform
+ENDFUNC
+
+FUNCTION c_2120PL7JJ()
+DO FORM testform2
+ENDFUNC
+
+FUNCTION p_2120PL7JK()
+IF TYPE("_screen.ActiveForm") = "O"
+  _screen.ActiveForm.release()
+ENDIF
+_SCREEN.oTabMenu.parent.Refresh()
+ENDFUNC
+
+FUNCTION u_2120PL7JL()
+LOCAL loItem, loSubMenu
+AEVENTS(paSource,0)
+paSource[1].lSelected = .t.
+losubMenu = CREATEOBJECT('frmPopup', paSource[1], _SCREEN.oTabMenu)
+WITH losubMenu
+  *-- Resize the window
+  .Width  = _SCREEN.oTabMenuHandler.nDefaultItemWidth
+  .Height =  72
+  .nPopupStyle = 1
+  .Resize()
+loItem = .cntPopupItems.AddPopupItem('Sub Option 1', 'NORM','A')
+loItem.cPicture = 'edit.bmp'
+loItem.cItemKey = 'HOME.HOME#1.OPTION6.SUBOPTION1'
+loItem = .cntPopupItems.AddPopupItem('Sub Option 2', 'NORM','B')
+loItem.cPicture = 'new.bmp'
+loItem.cItemKey = 'HOME.HOME#1.OPTION6.SUBOPTION2'
+loItem = .cntPopupItems.AddPopupItem('Sub Option 3', 'NORM','C')
+loItem.cItemKey = 'HOME.HOME#1.OPTION6.SUBOPTION3'
+
+  _SCREEN.oTabMenu.oSubMenu = loSubMenu
+  .Show()
+ENDWITH
+ENDFUNC
+
+FUNCTION p_2120PL7KN()
+IF goForm.BorderStyle = 3
+  goForm.BorderStyle = 0
+ELSE
+  goForm.BorderStyle = goForm.BorderStyle + 1
+ENDIF
+ENDFUNC
+
+FUNCTION u_2120PL7KW()
+LOCAL loItem, loSubMenu
+AEVENTS(paSource,0)
+paSource[1].lSelected = .t.
+losubMenu = CREATEOBJECT('frmPopup', paSource[1], _SCREEN.oTabMenu)
+WITH losubMenu
+  *-- Resize the window
+  .Width  = _SCREEN.oTabMenuHandler.nDefaultItemWidth
+  .Height =   0
+  .nPopupStyle = 1
+*-- Add the submenu specific code here
+loSubMenu.Width = 200
+loSubMenu.height = 300
+  .Resize()
+
+  _SCREEN.oTabMenu.oSubMenu = loSubMenu
+  .Show()
+ENDWITH
+ENDFUNC
+
+FUNCTION u_2120PL7KY()
+LOCAL loItem, loSubMenu
+AEVENTS(paSource,0)
+paSource[1].lSelected = .t.
+losubMenu = CREATEOBJECT('frmPopup', paSource[1], _SCREEN.oTabMenu)
+WITH losubMenu
+  *-- Resize the window
+  .Width  = _SCREEN.oTabMenuHandler.nDefaultItemWidth
+  .Height = 120
+  .nPopupStyle = 1
+  .Resize()
+loItem = .cntPopupItems.AddPopupItem('Sub Option 1', 'NORM','')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIOND.SUBOPTION1'
+loItem = .cntPopupItems.AddPopupItem('Sub Option 2', 'NORM','T')
+loItem.cPicture = 'new.bmp'
+loItem.ToolTipText = [The tooltip for the submenu]
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIOND.SUBOPTION2'
+loItem = .cntPopupItems.AddPopupItem('Sub Option 3', 'NORM','A')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIOND.SUBOPTION3'
+loItem = .cntPopupItems.AddPopupItem('Sub Option 4', 'NORM','Y')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIOND.SUBOPTION4'
+loItem = .cntPopupItems.AddPopupItem('Sub Option 5', 'NORM','')
+loItem.cItemKey = 'PROGRAMS.PROGRAM#1.OPTIOND.SUBOPTION5'
+
+  _SCREEN.oTabMenu.oSubMenu = loSubMenu
+  .Show()
+ENDWITH
+ENDFUNC
+
+FUNCTION c_2120PL7M0()
+MESSAGEBOX("Hello",4096,"Test")
+ENDFUNC
+
+FUNCTION b_2120PL7MB()
+SYS(1500, '_mtl_debugger', '_mtools')
+ENDFUNC
+
+FUNCTION b_2120PL7MC()
+SYS(1500, '_mtl_debugger', '_mtools')
+ENDFUNC
+
+FUNCTION p_2120PL7MD()
+IF goForm.Width = 500
+  goForm.Width = 900
+ELSE
+  goForm.Width = 500
+ENDIF
+ENDFUNC
+
+FUNCTION AppExit
+  _SCREEN.oToolbar.Release()
+  CLEAR EVENTS
+ENDFUNC
+
+FUNCTION AppMinimize
+  _SCREEN.WindowState = 1
+ENDFUNC
+
+FUNCTION AppMaximize
+  _SCREEN.WindowState = 2
+ENDFUNC
+
+FUNCTION AppRestore
+  _SCREEN.WindowState = 0
+ENDFUNC
+
+
+ENDDEFINE
+**************************************************************************************
